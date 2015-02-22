@@ -1,0 +1,110 @@
+# Practical Machine Learning - Course Project
+
+### Executive Summary
+
+Using the accelerometer of various devices we can take measurements about the activity of their users. This data can be used in order to improve their health, to find patterns in their behavior, or because they are tech geeks. The goal of this project is to predict the manner in which they did the exercise using data from this source: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv. This report describes how we built our model, how we used cross validation, what we think the expected out of sample error is, and why we made the choices you did. We also used our prediction model to predict 20 different test cases.
+
+### Prepare the datasets
+
+Load the training and testing data into corresponding data table.
+
+```{r}
+options(warn=-1)
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+
+set.seed(4321)  
+
+# Replace all missing values with "NA"
+training.data <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+testing.data <- read.csv('pml-testing.csv', na.strings=c("NA","#DIV/0!", ""))
+
+# Remove colums with missing values
+training.data <- training.data[,colSums(is.na(training.data)) == 0]
+testing.data <- testing.data[,colSums(is.na(testing.data)) == 0]
+
+# Keep the variables of interest
+training.data <- training.data[,-c(1:7)]
+testing.data <-testing.data[,-c(1:7)]
+
+```
+
+### Partition the training data
+
+We use 75% of the training data for training and the rest 25% for testing.
+
+```{r}
+train.index <- createDataPartition(y=training.data$classe, p=0.75, list=FALSE)
+train.new <- training.data[train.index, ] 
+test.new <- training.data[-train.index, ]     
+```
+
+The variable "classe" contains 5 levels: "A"", "B", "C", "D" and "E", so in the following histogram we can observe the frequency of each levels in the subTraining data set and compare one another. Level "A" for example is the most frequent with more than 4000 occurrences while level "D" is the least frequent with about 2500 occurrences.
+
+```{r}
+plot(train.new$classe, main="Variable classe in training sample", xlab="classe", ylab="Frequency")
+```
+
+### Create the prediction models
+
+We will generate two prediction models exploting the training data: one using Decision Trees and one using Random Forests.
+
+#### Decision Trees
+
+```{r}
+# Create the model
+model.with.decisionTree <- rpart(classe ~ ., data=train.new, method="class")
+
+# Predict using the model
+prediction.with.decisionTree <- predict(model.with.decisionTree, test.new, type = "class")
+
+# Test the model
+confusionMatrix(prediction.with.decisionTree, test.new$classe)
+
+```
+
+
+#### Random Forest
+
+```{r}
+# Create the model
+model.with.randomForest <- randomForest(classe ~. , data=train.new, method="class")
+
+# Predict using the model
+prediction.with.randomForest <- predict(model.with.randomForest, test.new, type = "class")
+
+# Test the model
+confusionMatrix(prediction.with.randomForest, test.new$classe)
+
+```
+
+### Decision
+
+From the previous analysis we can observe that Random Forest performed better than Decision Trees. In the first case the accuracy is 0.995 (95% CI: (0.993, 0.997)), while in the second case it is 0.739 (95% CI: (0.727, 0.752)). For Random Fores, we get an out-of-bag (OOB) estimate of error rate of 0.32% which is good. We estimate the out-of-sample error to be quite low, based on the OOB error from our model.
+
+
+### Submission
+
+As the Random Forest model provides better prediction accuracy over the Decission tree model, we will apply it on the test data (20 samples). The results are written in files for submission.
+
+```{r}
+final.prediction <- predict(model.with.randomForest, testing.data, type="class")
+final.prediction
+
+# Write files for submission
+pml_write_files = function(x)
+{
+  n = length(x)
+  
+  for(i in 1:n)
+  {
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(final.prediction)
+
+```
